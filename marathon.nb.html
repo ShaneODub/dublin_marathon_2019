@@ -1749,21 +1749,54 @@ summary {
 
 
 <!-- rnb-text-begin -->
-<p>This is an <a href="http://rmarkdown.rstudio.com">R Markdown</a> Notebook. When you execute code within the notebook, the results appear beneath the code.</p>
-<p>Try executing this chunk by clicking the <em>Run</em> button within the chunk or by placing your cursor inside it and pressing <em>Ctrl+Shift+Enter</em>.</p>
+<!-- rnb-text-end -->
+<!-- rnb-text-begin -->
+<div id="get-the-data" class="section level2">
+<h2>Get the data</h2>
+<p>Full results for the Dublin Marathon were scraped from tables on a website. (180 tables with 100 entrants on each table.) Tables were compiled into a list called ‘list.of.dataframes’.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucGxvdChjYXJzKVxuYGBgIn0= -->
-<pre class="r"><code>plot(cars)</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG4jIFNldCB1cCBhbiBlbXB0eSBsaXN0IHRvIHN0b3JlIG91ciBkb3dubG9hZGVkIHRhYmxlcy5cbmxpc3Qub2YuZGF0YWZyYW1lcyA8LSB2ZWN0b3IoXCJsaXN0XCIsMTgwKVxuXG51cmwgPC0gXCJodHRwczovL3d3dy50ZGxldmVudHNlcnZpY2VzLmNvLnVrL2V2ZW50LXJlc3VsdHMvZXZlbnRzP2V2ZW50PTM0OTImcGFnZT1cIlxuXG4jIFN0YXJ0aW5nIHdpdGggcGFnZSAxLCBsb29wIHRocm91Z2ggdGhlIDE4MCBwYWdlcyBhbmQgZXh0cmFjdCB0aGUgdGFibGVzLlxucGFnZSA8LSAxXG53aGlsZSAocGFnZSA8PTE4MCl7XG4gIGxpc3Qub2YuZGF0YWZyYW1lc1tbcGFnZV1dIDwtXG4gICAgcGFzdGUodXJsLHBhZ2Usc2VwPVwiXCIpICU+JVxuICAgIHJlYWRfaHRtbCgpICU+JSAgICAgICAgICAgICAgICAgICAgICMgeG1sMlxuICAgIGh0bWxfbm9kZXMoeHBhdGg9Jy9odG1sL2JvZHkvZGl2WzJdL2Rpdi9kaXYvZGl2L2Rpdi9kaXZbMl0vZGl2WzJdL3RhYmxlJykgJT4lIFxuICAgIGh0bWxfdGFibGUoKSAlPiUgICAgICAgICAgICAgICAgICAgICMgcnZlc3RcbiAgICBkYXRhLmZyYW1lKClcbiAgcGFnZSA8LSBwYWdlICsgMVxuICBTeXMuc2xlZXAoNSlcbn1cbmBgYCJ9 -->
+<pre class="r"><code>
+# Set up an empty list to store our downloaded tables.
+list.of.dataframes &lt;- vector(&quot;list&quot;,180)
+
+url &lt;- &quot;https://www.tdleventservices.co.uk/event-results/events?event=3492&amp;page=&quot;
+
+# Starting with page 1, loop through the 180 pages and extract the tables.
+page &lt;- 1
+while (page &lt;=180){
+  list.of.dataframes[[page]] &lt;-
+    paste(url,page,sep=&quot;&quot;) %&gt;%
+    read_html() %&gt;%                     # xml2
+    html_nodes(xpath=&#39;/html/body/div[2]/div/div/div/div/div[2]/div[2]/table&#39;) %&gt;% 
+    html_table() %&gt;%                    # rvest
+    data.frame()
+  page &lt;- page + 1
+  Sys.sleep(5)
+}</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG4jIE9uY2UgYWxsIGFyZSBkb3dubG9hZGVkLCBiaW5kIGFsbCB0aGUgcmVzdWx0cyBpbnRvIGEgc2luZ2xlIGRhdGFmcmFtZS5cbmFsbC5yZXN1bHRzLmRmIDwtIGJpbmRfcm93cyhsaXN0Lm9mLmRhdGFmcmFtZXMpICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIGRwbHlyICBcblxuYGBgIn0= -->
+<pre class="r"><code>
+# Once all are downloaded, bind all the results into a single dataframe.
+all.results.df &lt;- bind_rows(list.of.dataframes)                                         # dplyr  
+</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Error: Column <code>Gender.Position</code> can’t be converted from integer to character</p>
+<p>This is because some of the columns that contain mostly numeric data also contain ‘DNF’ (did not finish) for the runners who didn’t reach the finish line.</p>
 <p>Add a new chunk by clicking the <em>Insert Chunk</em> button on the toolbar or by pressing <em>Ctrl+Alt+I</em>.</p>
 <p>When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the <em>Preview</em> button or press <em>Ctrl+Shift+K</em> to preview the HTML file).</p>
 <p>The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike <em>Knit</em>, <em>Preview</em> does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.</p>
 <!-- rnb-text-end -->
+</div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIkR1YmxpbiBDaXR5IE1hcmF0aG9uIDIwMTk6IEFuYWx5c2lzIHdpdGggUiINCm91dHB1dDogaHRtbF9ub3RlYm9vaw0KLS0tDQoNClRoaXMgaXMgYW4gW1IgTWFya2Rvd25dKGh0dHA6Ly9ybWFya2Rvd24ucnN0dWRpby5jb20pIE5vdGVib29rLiBXaGVuIHlvdSBleGVjdXRlIGNvZGUgd2l0aGluIHRoZSBub3RlYm9vaywgdGhlIHJlc3VsdHMgYXBwZWFyIGJlbmVhdGggdGhlIGNvZGUuIA0KDQpUcnkgZXhlY3V0aW5nIHRoaXMgY2h1bmsgYnkgY2xpY2tpbmcgdGhlICpSdW4qIGJ1dHRvbiB3aXRoaW4gdGhlIGNodW5rIG9yIGJ5IHBsYWNpbmcgeW91ciBjdXJzb3IgaW5zaWRlIGl0IGFuZCBwcmVzc2luZyAqQ3RybCtTaGlmdCtFbnRlciouIA0KDQpgYGB7cn0NCnBsb3QoY2FycykNCmBgYA0KDQpBZGQgYSBuZXcgY2h1bmsgYnkgY2xpY2tpbmcgdGhlICpJbnNlcnQgQ2h1bmsqIGJ1dHRvbiBvbiB0aGUgdG9vbGJhciBvciBieSBwcmVzc2luZyAqQ3RybCtBbHQrSSouDQoNCldoZW4geW91IHNhdmUgdGhlIG5vdGVib29rLCBhbiBIVE1MIGZpbGUgY29udGFpbmluZyB0aGUgY29kZSBhbmQgb3V0cHV0IHdpbGwgYmUgc2F2ZWQgYWxvbmdzaWRlIGl0IChjbGljayB0aGUgKlByZXZpZXcqIGJ1dHRvbiBvciBwcmVzcyAqQ3RybCtTaGlmdCtLKiB0byBwcmV2aWV3IHRoZSBIVE1MIGZpbGUpLg0KDQpUaGUgcHJldmlldyBzaG93cyB5b3UgYSByZW5kZXJlZCBIVE1MIGNvcHkgb2YgdGhlIGNvbnRlbnRzIG9mIHRoZSBlZGl0b3IuIENvbnNlcXVlbnRseSwgdW5saWtlICpLbml0KiwgKlByZXZpZXcqIGRvZXMgbm90IHJ1biBhbnkgUiBjb2RlIGNodW5rcy4gSW5zdGVhZCwgdGhlIG91dHB1dCBvZiB0aGUgY2h1bmsgd2hlbiBpdCB3YXMgbGFzdCBydW4gaW4gdGhlIGVkaXRvciBpcyBkaXNwbGF5ZWQuDQo=</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogJ0R1YmxpbiBDaXR5IE1hcmF0aG9uIDIwMTk6IEFuYWx5c2lzIHdpdGggUicNCm91dHB1dDoNCiAgaHRtbF9kb2N1bWVudDoNCiAgICBkZl9wcmludDogcGFnZWQNCi0tLQ0KDQpgYGB7ciBpbmNsdWRlPUZBTFNFfQ0KbGlicmFyeSh4bWwyKQ0KbGlicmFyeShydmVzdCkNCmxpYnJhcnkoZHBseXIpDQpgYGANCg0KDQojIyBHZXQgdGhlIGRhdGENCg0KRnVsbCByZXN1bHRzIGZvciB0aGUgRHVibGluIE1hcmF0aG9uIHdlcmUgc2NyYXBlZCBmcm9tIHRhYmxlcyBvbiBhIHdlYnNpdGUuICgxODAgdGFibGVzIHdpdGggMTAwIGVudHJhbnRzIG9uIGVhY2ggdGFibGUuKSBUYWJsZXMgd2VyZSBjb21waWxlZCBpbnRvIGEgbGlzdCBjYWxsZWQgJ2xpc3Qub2YuZGF0YWZyYW1lcycuDQoNCmBgYHtyIFNjcmFwaW5nIHRoZSBkYXRhfQ0KDQojIFNldCB1cCBhbiBlbXB0eSBsaXN0IHRvIHN0b3JlIG91ciBkb3dubG9hZGVkIHRhYmxlcy4NCmxpc3Qub2YuZGF0YWZyYW1lcyA8LSB2ZWN0b3IoImxpc3QiLDE4MCkNCg0KIyBTdG9yZSB0aGUgVVJMIGluIGEgdmFyaWFibGUsIG1pbnVzIHRoZSBwYWdlIG51bWJlcjoNCnVybCA8LSAiaHR0cHM6Ly93d3cudGRsZXZlbnRzZXJ2aWNlcy5jby51ay9ldmVudC1yZXN1bHRzL2V2ZW50cz9ldmVudD0zNDkyJnBhZ2U9Ig0KDQojIE5vdyB3ZSBsb29wIHRocm91Z2ggMTgwIHBhZ2VzOyBhZGQgZWFjaCBwYWdlIG51bWJlciB0byB0aGUgVVJMOyBleHRyYWN0IGFuZCBzdG9yZSB0aGUgZGF0YS4NCnBhZ2UgPC0gMTc3DQp3aGlsZSAocGFnZSA8PTE4MCl7DQogIGxpc3Qub2YuZGF0YWZyYW1lc1tbcGFnZV1dIDwtDQogICAgcGFzdGUodXJsLHBhZ2Usc2VwPSIiKSAlPiUNCiAgICByZWFkX2h0bWwoKSAlPiUgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIHhtbDINCiAgICBodG1sX25vZGVzKHhwYXRoPScvaHRtbC9ib2R5L2RpdlsyXS9kaXYvZGl2L2Rpdi9kaXYvZGl2WzJdL2RpdlsyXS90YWJsZScpICU+JSAgICAgICAjIHJ2ZXN0DQogICAgaHRtbF90YWJsZSgpICU+JSAgICAgICAgICAgICAgICAgICAgDQogICAgZGF0YS5mcmFtZSgpDQogIHBhZ2UgPC0gcGFnZSArIDENCiAgU3lzLnNsZWVwKDUpICMgUGF1c2UgNDVzIGFmdGVyIGRvd25sb2FkaW5nIGVhY2ggdGFibGUsIHRvIGF2b2lkIGJlaW5nIG1pc3Rha2VuIGZvciBtaXNjaGllZi1tYWtlci4NCn0NCmBgYA0KDQoNCmBgYHtyfQ0KDQojIE9uY2UgYWxsIGFyZSBkb3dubG9hZGVkLCBiaW5kIGFsbCB0aGUgcmVzdWx0cyBpbnRvIGEgc2luZ2xlIGRhdGFmcmFtZS4NCmFsbC5yZXN1bHRzLmRmIDwtIGJpbmRfcm93cyhsaXN0Lm9mLmRhdGFmcmFtZXMpICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIGRwbHlyICANCg0KYGBgDQoNCkVycm9yOiBDb2x1bW4gYEdlbmRlci5Qb3NpdGlvbmAgY2FuJ3QgYmUgY29udmVydGVkIGZyb20gaW50ZWdlciB0byBjaGFyYWN0ZXINCg0KVGhpcyBpcyBiZWNhdXNlIHNvbWUgb2YgdGhlIGNvbHVtbnMgdGhhdCBjb250YWluIG1vc3RseSBudW1lcmljIGRhdGEgYWxzbyBjb250YWluICdETkYnIChkaWQgbm90IGZpbmlzaCkgZm9yIHRoZSBydW5uZXJzIHdobyBkaWRuJ3QgcmVhY2ggdGhlIGZpbmlzaCBsaW5lLg0KDQpBZGQgYSBuZXcgY2h1bmsgYnkgY2xpY2tpbmcgdGhlICpJbnNlcnQgQ2h1bmsqIGJ1dHRvbiBvbiB0aGUgdG9vbGJhciBvciBieSBwcmVzc2luZyAqQ3RybCtBbHQrSSouDQoNCldoZW4geW91IHNhdmUgdGhlIG5vdGVib29rLCBhbiBIVE1MIGZpbGUgY29udGFpbmluZyB0aGUgY29kZSBhbmQgb3V0cHV0IHdpbGwgYmUgc2F2ZWQgYWxvbmdzaWRlIGl0IChjbGljayB0aGUgKlByZXZpZXcqIGJ1dHRvbiBvciBwcmVzcyAqQ3RybCtTaGlmdCtLKiB0byBwcmV2aWV3IHRoZSBIVE1MIGZpbGUpLg0KDQpUaGUgcHJldmlldyBzaG93cyB5b3UgYSByZW5kZXJlZCBIVE1MIGNvcHkgb2YgdGhlIGNvbnRlbnRzIG9mIHRoZSBlZGl0b3IuIENvbnNlcXVlbnRseSwgdW5saWtlICpLbml0KiwgKlByZXZpZXcqIGRvZXMgbm90IHJ1biBhbnkgUiBjb2RlIGNodW5rcy4gSW5zdGVhZCwgdGhlIG91dHB1dCBvZiB0aGUgY2h1bmsgd2hlbiBpdCB3YXMgbGFzdCBydW4gaW4gdGhlIGVkaXRvciBpcyBkaXNwbGF5ZWQuDQo=</div>
 
 
 
