@@ -1,11 +1,10 @@
 library(dplyr)
 library(tidyverse)
 library(tibble)
+library(magrittr)
 library(lubridate)
 install.packages("hms")
 library(hms)
-install.packages("convert")
-library(convert)
 
 library(xml2)
 library(rvest)
@@ -41,6 +40,7 @@ while (page <=180){
 
 # Once all are downloaded, bind all the results into a single dataframe.
 
+
 all.results <- bind_rows(list.of.dataframes)
 # Didn't work: "Error: Column `Gender.Position` can't be converted from integer to character"
 
@@ -59,7 +59,7 @@ all.results <- as_tibble(all.results)
 glimpse(all.results)
 View(all.results)
 
-all.results %>% distinct(Category)
+unique(all.results$Category)
 
 # Remove the gender info from category, and tidy it a bit.
 all.results$Category <- 
@@ -78,13 +78,72 @@ all.results$Gender <- as.factor(all.results$Gender)
 
 ### Missing values
 
-# There are no missing values for Race.Number, Gender, or Category( i.e. age bracket)
+# There are no missing values for Race.Number, Gender, or Category(i.e. age bracket)
 
-# Let's start with the 10k checkpoint times # <<<<<< Left off here.
+# Let's start with the 10k checkpoint times
 all.results %>% filter(is.na(X10K)) %>% View()
-# 149 entries in total. Most of them missed more than one checkpoint. I'm just going to delete all.
-all.results <- filter(all.results, !is.na(all.results$X10K)) %>% View()
-  
+
+# When deciding what to do with runners who have missing times, I'm going to take
+# into account how many other times are missing.
+count_na <- function(x) sum(is.na(x[4:7]))
+
+all.results <- 
+  all.results %>%
+  mutate(count_na = apply(., 1, count_na))
+
+all.results %>% 
+  filter(is.na(X10K) & count_na %in% c(2,3)) %>% 
+  View()
+
+# Get rid of the runners who missed  10k checkpoint and 1 or 2 more checkpoints.
+all.results <- 
+all.results %>% 
+  filter(!
+           (is.na(X10K) & (count_na %in% c(2,3)))
+         )
+
+# Having a look at runners who missed 20k chkpt and 1 more chkpt:
+all.results %>% 
+  filter(is.na(X20K) & (count_na == 2)) %>% 
+  View()
+
+# There's just a few. Getting rid.
+all.results <- 
+  all.results %>% 
+  filter(!
+           (is.na(X20K) & (count_na == 2))
+         )
+
+# Having a look at runners who missed 30k chkpt and 40k chkpt:
+all.results %>% 
+  filter(is.na(X30K) & (count_na == 2)) %>% 
+  View()
+
+# A lot of these are just people who didn't finish. We want to keep those for now.
+# Filtering again to show the people with finish times, who missed the 30k & 40k chkpts.
+all.results %>% 
+  filter(is.na(X30K) & (count_na == 2) & Overall.Position != "DNF") %>% 
+  View()
+
+#Getting rid of these:
+all.results <- 
+  all.results %>% 
+  filter(!
+           (is.na(X30K) & (count_na == 2) & Overall.Position != "DNF")
+         )
+
+# One more thing. People who missed more than 1 checkpoint but have a finish time.
+all.results %>% 
+  filter(!is.na(Gun.Time) & (count_na >= 2)) %>% 
+  View()
+
+# Can't trust these results. Getting rid.
+all.results <- 
+  all.results %>% 
+  filter(!
+           (!is.na(Gun.Time) & (count_na >= 2))
+         ) ## <<<< finished here for the night
+
 # There are no blanks in the Gun.Time, so will use these to fill in the blanks in the Chip.Time
 all.results$Chip.Time[all.results$Chip.Time == ""] <- 
   all.results$Gun.Time[all.results$Chip.Time == ""]
