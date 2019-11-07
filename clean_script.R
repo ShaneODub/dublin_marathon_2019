@@ -1,8 +1,18 @@
+library(dplyr)
+library(tidyverse)
+library(tibble)
+library(lubridate)
+install.packages("hms")
+library(hms)
+install.packages("convert")
+library(convert)
+
 library(xml2)
 library(rvest)
 library(plyr)
-library(dplyr)
-library(lubridate)
+
+
+setwd("C:/Users/Shane/Projects/marathon")
 
 ## Get the data
 
@@ -30,17 +40,58 @@ while (page <=180){
 }
 
 # Once all are downloaded, bind all the results into a single dataframe.
-# 
-# ```{r}
 
-all.results.df <- rbind.fill(list.of.dataframes)                                        # plyr
-str(all.results.df)
+all.results <- bind_rows(list.of.dataframes)
+# Didn't work: "Error: Column `Gender.Position` can't be converted from integer to character"
 
-# Keeping just the columns I think I'll need.
-all.results.df <- all.results.df[c(1,4,6,10,12,16,18,20,22,21)]
-str(all.results.df)
+# First, lapply to mutate_if over the list and then bind_rows
+all.results <- 
+  list.of.dataframes %>% 
+  lapply(., mutate_if, is.integer, as.character) %>% 
+  bind_rows()
 
-all.results.df <- all.results.df[1:17904,]
+View(all.results)
+
+# Keeping just the columns I plan to use
+all.results <- select(all.results,1,4,6,10,12,16,18,20,22,21)
+
+all.results <- as_tibble(all.results)
+glimpse(all.results)
+View(all.results)
+
+all.results %>% distinct(Category)
+
+# Remove the gender info from category, and tidy it a bit.
+all.results$Category <- 
+  all.results$Category %>% 
+  str_remove("[MF]") %>%
+  str_remove("[U]") %>% 
+  str_replace("19","18") %>% 
+  str_replace("S","20") %>% 
+  as.numeric()
+
+# Change all the time columns to hms. It will NA the blanks at the same time.
+all.results[,4:9] <- lapply(all.results[,4:9], as_hms)
+
+# Gender column as category
+all.results$Gender <- as.factor(all.results$Gender)
+
+### Missing values
+
+# There are no missing values for Race.Number, Gender, or Category( i.e. age bracket)
+
+# Let's start with the 10k checkpoint times # <<<<<< Left off here.
+all.results %>% filter(is.na(X10K)) %>% View()
+# 149 entries in total. Most of them missed more than one checkpoint. I'm just going to delete all.
+all.results <- filter(all.results, !is.na(all.results$X10K)) %>% View()
+  
+# There are no blanks in the Gun.Time, so will use these to fill in the blanks in the Chip.Time
+all.results$Chip.Time[all.results$Chip.Time == ""] <- 
+  all.results$Gun.Time[all.results$Chip.Time == ""]
+
+all.results %>% 
+  filter(Overall.Position != "DNF") %>% 
+  View()
 
 # Convert the timestamp columns to POSIXct format
 all.results.df[,4:9] <- data.frame(apply(all.results.df[,4:9],2,as.POSIXct, format = "%H:%M:%S"))
