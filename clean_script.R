@@ -1,9 +1,10 @@
 library(dplyr)
 library(tidyverse)
+library(magrittr)
 library(hms)
 
 library(tibble)
-library(magrittr)
+
 library(lubridate)
 install.packages("hms")
 
@@ -242,7 +243,7 @@ summary(all.results %>%
 # The 0.503 is calculated from the medians in the summary table above.
 all.results <- 
   all.results %>%
-  mutate(X10K = if_else(is.na(X10K) & count_na == 1, X20K/1.98, X10K))
+  mutate(X10K = if_else(is.na(X10K) & count_na == 1, X20K*0.503, X10K))
 
 # Impute missing 20k times from the 10k & 30k times.
 # The 20k times should be below he midpoint of these two times.
@@ -266,7 +267,15 @@ all.results <-
 
 # Now the only missing times are from people who didn't finish.
 
-# One last thing: rename the 
+# Going to plit out the 'DNF' info to another column
+all.results <- 
+  all.results %>% 
+  mutate(Finisher = if_else(Overall.Position =="DNF",
+                            "No",
+                            "Yes"))
+
+# Convert the Overall.Position column to numeric
+all.results$Overall.Position <- as.numeric(all.results$Overall.Position)
 
 saveRDS(all.results, file = "all.results.rds") # just in case I mess up
 
@@ -277,13 +286,25 @@ saveRDS(all.results, file = "all.results.rds") # just in case I mess up
 
 splits <- 
   all.results %>% 
-  mutate(split_1 = X10K,
-         split_2 = X20K - X10K,
-         split_3 = X30K - X20K,
-         split_4 = X40K - X30K)
+  transmute(split_1 = X10K,
+            split_2 = X20K - X10K,
+            split_3 = X30K - X20K,
+            split_4 = X40K - X30K,
+            Gender,
+            Age.Bracket,
+            Finisher)
+
+summary(splits)
+glimpse(splits)
+
+qqnorm(splits[,1:4])
 
 pairs(splits[,12:15])
 cor(splits[,12:15], use = "complete.obs")
+
+var.test()
+
+boxplot(splits[,12:15])
 
 ggplot(splits, mapping = aes(split_3,split_4, colour = Gender)) + 
   geom_point(size = 0.4, na.rm = T) +
