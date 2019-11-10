@@ -2,13 +2,16 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(hms)
+library(magrittr)
+
+library(tweenr) # maybe don't need
 
 setwd("C:/Users/Shane/Projects/marathon")
 
 # Loading the list.of.dataframes that was previously scraped from 
 # the marathon results website
 
-list.of.dataframes <- readRDS(choose.files())
+list.of.dataframes <- readRDS("full_scrape_list_of_dataframes.rds")
 
 results <- bind_rows(list.of.dataframes)
 # Didn't work: "Error: Column `Gender.Position` can't be converted from integer to character"
@@ -20,10 +23,21 @@ results <-
   bind_rows() %>% 
   as_tibble()
 
+# Visual inspection
+View(results)
 # Keeping just the columns I plan to use
 results <- select(results,1,4,6,10,12,14,16,18,20,22,21)
-
-results %>% View()
+#
+# Race.Number, Gender, Category apparently contain no missing or weird values.
+#
+# X10K,X20K,Halfway,X30K,X40K,Chip.Time etc. contain times at various checkpoints, but 
+# also some NA and blank cells, and 'DNF' for some of the non-finishers.
+#
+# Overall.Position contains the order of finishing, but also 'DNF' for the non-finishers.
+#
+# Gun.Time contains only times, and 'DNF'. No empty or NA cells.
+#
+# All columns are currently character type.
 
 glimpse(results)
 # Observations: 17,931
@@ -57,12 +71,13 @@ glimpse(results)
 # $ Distance         <chr> "X10K", "X20K", "Halfway", "X30K", "X40K", "...
 # $ Time             <chr> "00:31:54", "01:01:53", "01:05:06", "01:32:3...
 
+
 ## Cleaning
 ## 1. Need to split a couple of columns
 ## 2. Need appropriate data types for each column
 ## 3. Deal with missing values
 
-# 'Category' column contains Gender info, and Age info. We already have a Gender column.
+# 'Category' column contains Gender info and Age info. We already have a Gender column.
 unique(results$Category)
 # [1] "MS"   "M45"  "M35"  "M40"  "FS"   "M50"  "F35"  "F40"  "M65"  "F45"  "M55" 
 # [12] "M60"  "MU19" "F50"  "F55"  "F60"  "F65"  "M70"  "FU19" "M75"  "F75"  "F70" 
@@ -74,41 +89,41 @@ results$Category <-
   str_replace("U19","18") %>%          # Change U19 (under 19) to 18.
   str_replace("S","20")                # Change S (senior) to 20.
 
-unique(results$Category)
-#  [1] "20" "45" "35" "40" "50" "65" "55" "60" "18" "70" "75" "80"
-
 # Give the 'Category' column a more meaningful name, 'Age.Bracket'
 results <- 
   results %>% 
   rename(Age.Bracket = Category)
 
-# The Overall.Position column contains finishing place, and a 'DNF' for those who didn't finish.
+unique(results$Age.Bracket)
+#  [1] "20" "45" "35" "40" "50" "65" "55" "60" "18" "70" "75" "80"
+
+# The Overall.Position column contains finishing place and a 'DNF' for those who didn't finish.
 # Creating a logical column with TRUE or FALSE to indicate whether the runner finished.
+
 results <-   
   results %>% 
   mutate(Finisher = (Overall.Position != "DNF")) %>% 
-  select(1,2,3,4,7,5,6)
-
-# In the original wide data we had a Gun.Time and Chip.Time as finishing times.
-# I want to use Chip.Time but there are some missing values. Will replace from Gun.Time
+  select(1,2,3,4,7,5,6)          # Placing the new 7th column at the 5th position.
 
 # The distance variable contains the old column names from the original wide format.
 # We can make them more meaningful.
 
 results$Distance <- 
   results$Distance %>% 
-  str_remove_all("[XK]") %>%
+  str_remove_all("[XK]") %>%                  # X10K, X20K, X30K, X40K becomes 10,20,30,40
   str_replace("Halfway","21.1") %>%           # The halfway point is at 21.1 kilometers.
-  str_replace("Gun.Time","42.2") %>%          # Finish point is at ca. 42.2 kilometers
-  str_replace("Chip.Time","42.195")           # Differentiate Gun.Time & Chip.Time for now.
+  str_replace("Chip.Time","42.2")             # The finish line is 42.2 kilometers
 
-# Now to assign an appropriate type to each variable
+unique(results$Distance)
+# [1] "10"       "20"       "21.1"     "30"       "40"       "Gun.Time" "42.2"
+# We're going to use Gun.Time to fill in some of the blanks in the Time column  
+# where Distance = 42.2 (formerly 'Chip.Time').
 
+# Now to assign an appropriate type to each variable. This will coerce some of the 
+# invalid entries to 'NA'.
+#
 # Race.Number (in theory) is based on predicted time when signing up for the race, so 
 # choosing as.numeric() for this rather than factor or character.
-
-# as.numeric() on a couple of columns will cause some 'DNF' entries to coerce to 'NA' 
-# but we already captured the did-not-finsh information in the 'Finisher' column.
 
 results <-   
   results %>% 
@@ -116,14 +131,149 @@ results <-
          Gender = as.factor(Gender),
          Age.Bracket = as.factor(Age.Bracket), # For now. Maybe as.numeric() later.
          Overall.Position = as.numeric(Overall.Position),
-         Distance = as.numeric(Distance),      # Distances are expressed in kilometers
          Time = as.numeric(as_hms(Time))/60)   # Times are now expressed in minutes.
 
-results[results$Distance > 42,] <- 
-  results %>%
-  filter(Distance > 42) %>% 
-  fill(Time) %>%  View() # <<<<< Finished here
+# Where distance = 42.2 will replace from Gun.Time
+results %>%
+  group_by(Race.Number) %>% 
+  mutate(newTime = if_else(is.na(Time) & Distance == 42.2,
+                        lag(Time),
+                        -1)) %>% View() ##<<< stopped here, not working.
           
-  
+# Now getting rid of the 'Gun.Time' rows and refactoring the Distance column as numeric.
+results <- 
+  results %>% 
+  filter(Distance != "Gun.Time") %>%
+  mutate(Distance = as.numeric(Distance))
 
 glimpse(results)
+# Observations: 107,586
+# Variables: 7
+# $ Race.Number      <dbl> 14, 14, 14, 14, 14, 14, 25, 25, 25, 25, 25, 25, 3, 3, ...
+# $ Gender           <fct> Male, Male, Male, Male, Male, Male, Male, Male, Male, ...
+# $ Age.Bracket      <fct> 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20...
+# $ Overall.Position <dbl> 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, ...
+# $ Finisher         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, ...
+# $ Distance         <dbl> 10.0, 20.0, 21.1, 30.0, 40.0, 42.2, 10.0, 20.0, 21.1, ...
+# $ Time             <dbl> 31.90000, 61.88333, 65.10000, 92.51667, 121.70000, 128...
+
+# Other missing values:
+results %>% 
+  group_by(Distance) %>%
+  filter(is.na(Time) & Finisher) %>% 
+  count()
+# A tibble: 5 x 2
+# Groups:   Distance [5]
+#    Distance   n
+#     <dbl>   <int>
+# 1     10     100
+# 2     20      75
+# 3     21.1   127
+# 4     30      68
+# 5     40      40
+
+# How many runners who finished are missing more than 1 checkpoint?
+
+results %>%
+  group_by(Race.Number) %>%
+  filter(is.na(Time) & Finisher) %>% 
+  count() %>%
+  filter(n > 1)
+
+# A tibble: 85 x 2
+# Groups:   Race.Number [85]
+#       Race.Number n
+#          <dbl>  <int>
+# 1         761     4
+# 2        1648     3
+# 3        2168     2
+# 4        2461     5
+# 5        3051     3
+# 6        4511     3
+# 7        4895     3
+# 8        5067     3
+# 9        5076     2
+# 10        5506     2
+# # ... with 75 more rows
+
+# Going to temporarily join the count (n) to the results tibble
+results <- 
+left_join(results, 
+          results %>% 
+            group_by(Race.Number) %>%
+            filter(is.na(Time)) %>% 
+            count(),
+          by = "Race.Number")
+
+results$n[is.na(results$n)] <- 0
+
+# Showing one runner as an example:
+results %>% filter(Race.Number == 19596)
+# Missing times from 10,20 & 21.1 checkpoint, so n = 3 in the rightmost column.
+# A tibble: 6 x 8
+#    Race.Number Gender Age.Bracket Overall.Position Finisher Distance  Time     n
+#      <dbl>     <fct>     <fct>          <dbl>       <lgl>     <dbl>   <dbl>  <int>
+# 1    19596     Female     60             NA         FALSE      10      NA      3
+# 2    19596     Female     60             NA         FALSE      20      NA      3
+# 3    19596     Female     60             NA         FALSE      21.1    NA      3
+# 4    19596     Female     60             NA         FALSE      30      16.4    3
+# 5    19596     Female     60             NA         FALSE      40      113.    3
+# 6    19596     Female     60             NA         FALSE      42.2    534.    3
+
+# I want to remove runners where n > 1 and they're marked as a Finisher.
+# A problem with the tmining chips, possibly, or with the runners' start times.
+
+# Have a a look at them first
+results %>% 
+  filter(n>1 & Finisher) %>%
+  View()
+# 510 results
+
+# Now negate the filter to remove them.
+results <- 
+  results %>% 
+  filter(!
+           (n>1 & Finisher)
+         )
+
+# Let's temporarily dump the runners who didn't finish into another tibble
+
+results.dnf <-
+  results %>% 
+  filter(!Finisher)
+
+results <- 
+  results %>% 
+  filter(Finisher)
+
+# Now the results table has people who finished the race, and who have 0 or 1 missing times.
+# The mean times may not be informative, because of outliers at either end of the spectrum.
+# Let's have a look at the median times.
+
+results %>% 
+  group_by(Distance) %>%
+  summarise(m = median(Time, na.rm = T))
+
+# A tibble: 6 x 2
+#    Distance  m
+#      <dbl>  <dbl>
+# 1     10    56.3
+# 2     20    113. 
+# 3     21.1  119. 
+# 4     30    172. 
+# 5     40    236. 
+# 6     42.2  250.
+
+summary(results)
+# Missing 10k,20k,30k,40k times.
+results %>% group_by(Race.Number)
+
+# Missing 10k times
+group
+
+
+df %>%
+  mutate(MonthlyCharges
+         = replace(MonthlyCharges,
+                   is.na(MonthlyCharges),
+                   median(MonthlyCharges, na.rm = TRUE)))

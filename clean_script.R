@@ -246,13 +246,13 @@ all.results <-
   mutate(X10K = if_else(is.na(X10K) & count_na == 1, X20K*0.503, X10K))
 
 # Impute missing 20k times from the 10k & 30k times.
-# The 20k times should be below he midpoint of these two times.
+# The 20k times should be below the midpoint of these two times.
 all.results <- 
   all.results %>%
   mutate(X20K = if_else(is.na(X20K) & count_na == 1, X10K + 0.48*(X30K - X10K), X20K))
 
 # Impute missing 30k times from the 20k & 40k times.
-# The 30k times should be below he midpoint of these two times.
+# The 30k times should be below the midpoint of these two times.
 all.results <- 
   all.results %>%
   mutate(X30K = if_else(is.na(X30K) & count_na == 1, X20K + 0.44*(X40K - X20K), X30K))
