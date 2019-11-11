@@ -3,8 +3,7 @@ library(tidyr)
 library(stringr)
 library(hms)
 library(magrittr)
-
-library(tweenr) # maybe don't need
+library(ggplot2)
 
 setwd("C:/Users/Shane/Projects/marathon")
 
@@ -133,12 +132,13 @@ results <-
          Overall.Position = as.numeric(Overall.Position),
          Time = as.numeric(as_hms(Time))/60)   # Times are now expressed in minutes.
 
-# Where distance = 42.2 will replace from Gun.Time
-results %>%
-  group_by(Race.Number) %>% 
-  mutate(newTime = if_else(is.na(Time) & Distance == 42.2,
+# Where distance = 42.2 and time is NA, replace from Gun.Time
+# which is always the previous (lagging) entry.
+results <-   
+  results %>%
+  mutate(Time = if_else(is.na(Time) & Distance == 42.2,
                         lag(Time),
-                        -1)) %>% View() ##<<< stopped here, not working.
+                        Time))
           
 # Now getting rid of the 'Gun.Time' rows and refactoring the Distance column as numeric.
 results <- 
@@ -157,7 +157,7 @@ glimpse(results)
 # $ Distance         <dbl> 10.0, 20.0, 21.1, 30.0, 40.0, 42.2, 10.0, 20.0, 21.1, ...
 # $ Time             <dbl> 31.90000, 61.88333, 65.10000, 92.51667, 121.70000, 128...
 
-# Other missing values:
+# Other missing values from runners who finished:
 results %>% 
   group_by(Distance) %>%
   filter(is.na(Time) & Finisher) %>% 
@@ -208,20 +208,20 @@ left_join(results,
 results$n[is.na(results$n)] <- 0
 
 # Showing one runner as an example:
-results %>% filter(Race.Number == 19596)
-# Missing times from 10,20 & 21.1 checkpoint, so n = 3 in the rightmost column.
-# A tibble: 6 x 8
-#    Race.Number Gender Age.Bracket Overall.Position Finisher Distance  Time     n
-#      <dbl>     <fct>     <fct>          <dbl>       <lgl>     <dbl>   <dbl>  <int>
-# 1    19596     Female     60             NA         FALSE      10      NA      3
-# 2    19596     Female     60             NA         FALSE      20      NA      3
-# 3    19596     Female     60             NA         FALSE      21.1    NA      3
-# 4    19596     Female     60             NA         FALSE      30      16.4    3
-# 5    19596     Female     60             NA         FALSE      40      113.    3
-# 6    19596     Female     60             NA         FALSE      42.2    534.    3
+results %>% filter(Race.Number == 19596) %>% select(5:8)
+# Missing times from 10,20,21.1 & 42.2 checkpoint, so n = 4 in the rightmost column.
+# A tibble: 6 x 4
+# Finisher   Distance   Time     n
+#   <lgl>       <dbl>   <dbl>   <dbl>
+# 1 FALSE        10      NA       4
+# 2 FALSE        20      NA       4
+# 3 FALSE        21.1    NA       4
+# 4 FALSE        30      16.4     4
+# 5 FALSE        40     113.      4
+# 6 FALSE        42.2    NA       4
 
 # I want to remove runners where n > 1 and they're marked as a Finisher.
-# A problem with the tmining chips, possibly, or with the runners' start times.
+# A problem with the timing chips, possibly, or with the runners' start times.
 
 # Have a a look at them first
 results %>% 
@@ -236,7 +236,7 @@ results <-
            (n>1 & Finisher)
          )
 
-# Let's temporarily dump the runners who didn't finish into another tibble
+# Let's temporarily place the runners who didn't finish into another tibble
 
 results.dnf <-
   results %>% 
@@ -245,10 +245,118 @@ results.dnf <-
 results <- 
   results %>% 
   filter(Finisher)
-
 # Now the results table has people who finished the race, and who have 0 or 1 missing times.
-# The mean times may not be informative, because of outliers at either end of the spectrum.
-# Let's have a look at the median times.
+
+# Have a a look at the runners who missed 1 checkpoint
+results %>% 
+  filter(n == 1) %>%
+  View()
+# 906 results
+
+# Let's see what checkpoints were missed
+results %>% 
+  group_by(Distance) %>% 
+  summarise(Missing = sum(is.na(Time)))
+# A tibble: 6 x 2
+#    Distance   Missing
+#      <dbl>     <int>
+# 1     10        44
+# 2     20        18
+# 3     21.1      64
+# 4     30        15
+# 5     40        10
+# 6     42.2       0
+
+# Lets have at all the times for the 44 runners with a missing 10K time.
+results %>% 
+  group_by(Race.Number) %>% 
+  filter(any(Distance == 10 & is.na(Time))) %>% 
+  View()
+
+# There's some weird results. People missing the 10k checkpoint but reaching the 20k in
+# record breaking times and then taking another 3 hours to reach the finish line.
+# They possibly started in an earlier wave than they were supposed to, messing up their times,
+# or they joined the race later than the start line.
+
+# Can see them better when the data is sorted.
+# Will define a function because we'll use it for the other checkpoints as well.
+
+missing.times <- function (d){
+  return(
+    results %>% 
+      group_by(Race.Number) %>% 
+      filter(any(Distance == d & is.na(Time))) %>% 
+      mutate(min.x = min(Time, na.rm = T)) %>% 
+      arrange(min.x)
+  )
+}
+
+View(missing.times(10))
+
+# Visually scanning these, the weird results have 20k times that are less than 90 minutes.
+# Can narrow the focus to the weird results with another filter
+missing.times(10) %>% 
+  filter(any(Distance == 20 & Time < 90)) %>% 
+  View()
+# 54 rows (9 runners)
+
+# Can negate the filters used above and remove the weird results from the dataset.
+results <- 
+  results %>% 
+  group_by(Race.Number) %>% 
+  filter(!
+           (any(Distance == 10 & is.na(Time)) &
+            any(Distance == 20 & Time < 90))
+         )
+
+# Runners with a missing 20k time
+View(missing.times(20))
+# 108 rows, 18 runners.
+# The only anomaly is the runner with a missing 20k time and a 10k time of 8 minutes.
+# Removing:
+results <- 
+  results %>% 
+  group_by(Race.Number) %>% 
+  filter(!
+           (any(Distance == 20 & is.na(Time)) &
+            any(Distance == 10 & Time < 10))
+  )
+
+# Runners with a missing 30k time
+View(missing.times(30))
+# 90 rows, 15 runners.
+# No weirdness.
+
+# Runners with a missing 40k time
+View(missing.times(40))
+# 60 rows, 10 runners.
+# Only weirdness is two runners who were going at a consistent pace to the 30k mark or beyond,
+# but then dropped to way less than walking pace, and missed the 40k checkpoint.
+# Deleting:
+results <- 
+  results %>% 
+  group_by(Race.Number) %>% 
+  filter(!
+           (any(Distance == 40 & is.na(Time)) &
+            any(Distance == 42.2 & Time > 345))
+  )
+
+# Let's look again at what checkpoints were missed
+results %>% 
+  group_by(Distance) %>% 
+  summarise(Missing = sum(is.na(Time)))
+# A tibble: 6 x 2
+# Distance Missing
+# <dbl>   <int>
+# 1     10        35
+# 2     20        17
+# 3     21.1      64
+# 4     30        15
+# 5     40         8
+# 6     42.2       0
+
+# Let's have a look at the median times of the remaining runners. Mean times may not be 
+# informative, because of outliers at either end of the spectrum.
 
 results %>% 
   group_by(Distance) %>%
@@ -264,16 +372,130 @@ results %>%
 # 5     40    236. 
 # 6     42.2  250.
 
-summary(results)
-# Missing 10k,20k,30k,40k times.
-results %>% group_by(Race.Number)
+# Imputing missing times.
 
-# Missing 10k times
-group
+# Impute missing 10k times.
 
+results <- 
+  results %>% 
+  mutate(Time = if_else(is.na(Time) & Distance == 10,
+                        0.498 * lead(Time),
+                        Time))
 
-df %>%
-  mutate(MonthlyCharges
-         = replace(MonthlyCharges,
-                   is.na(MonthlyCharges),
-                   median(MonthlyCharges, na.rm = TRUE)))
+# Impute missing 20k times.
+
+results <- 
+  results %>% 
+  mutate(Time = if_else(is.na(Time) & Distance == 20,
+                        lag(Time) + 0.904 * (lead(Time) - lag(Time)),
+                        Time))
+
+# Impute missing 21.1k times.
+
+results <- 
+  results %>% 
+  mutate(Time = if_else(is.na(Time) & Distance == 21.1,
+                        lag(Time) + 0.101 * (lead(Time) - lag(Time)),
+                        Time))
+
+# Impute missing 30k times.
+
+results <- 
+  results %>% 
+  mutate(Time = if_else(is.na(Time) & Distance == 30,
+                        lag(Time) + 0.452 * (lead(Time) - lag(Time)),
+                        Time))
+
+# Impute missing 40k times.
+
+results <- 
+  results %>% 
+  mutate(Time = if_else(is.na(Time) & Distance == 40,
+                        lag(Time) + 0.82 * (lead(Time) - lag(Time)),
+                        Time))
+
+saveRDS(results, "results.RDS") # saved at 5:40 11/11
+
+# Defining a function for 5-number summary
+fiver <- function(df){
+  df %>% 
+    group_by(Distance) %>% 
+    summarise(min = min(Time),
+              q1 = quantile(Time, probs = .25),
+              median = median(Time),
+              mean = mean(Time),
+              q3 = quantile(Time, probs = .75),
+              max = max(Time),
+              sd = sd(Time)) %>% 
+    as.data.frame() %>% 
+    round(2)
+}
+ 
+fiver(results) 
+#    Distance  min     q1  median   mean    q3    max    sd
+# 1     10.0   2.93  50.97  56.27  57.50  62.92 130.90  9.85
+# 2     20.0  61.83 101.37 112.57 115.24 126.18 238.65 20.63
+# 3     21.1  65.08 106.82 118.58 121.53 133.22 251.31 21.99
+# 4     30.0  92.52 154.58 171.60 177.30 195.11 364.00 34.11
+# 5     40.0 121.70 210.39 236.07 242.91 269.23 496.17 48.11
+# 6     42.2 128.10 222.99 250.29 257.08 284.82 520.35 50.81
+
+# There's some weirdness going on with the 10k times. The min is 2.9 minutes.
+# Having a closer look in the View window.
+results %>% 
+  group_by(Race.Number) %>%  
+  mutate(min.x = min(Time, na.rm = T)) %>% 
+  arrange(min.x) %>% 
+  View()
+
+# Am going to examine the differences in the 10k splits to see if there's 
+# an efficient way to spot anomalies
+splits <- 
+  results %>% 
+  group_by(Race.Number) %>% 
+  filter(Distance %in% c(10,20,30,40)) %>% 
+  mutate(Time = Time - lag(Time, default = 0))%>% 
+  select(1,2,3,4,6,7) 
+
+View(splits)
+
+fiver(splits)
+#   Distance   min  q1   median  mean  q3    max    sd
+# 1       10  2.93 50.97  56.27 57.50 62.92 130.90  9.85
+# 2       20 29.97 50.38  56.13 57.73 63.15 118.27 10.98
+# 3       30 30.63 52.33  59.17 62.07 69.25 138.15 14.12
+# 4       40 29.18 54.77  63.43 65.61 74.43 147.08 15.12
+
+splits <-   
+  splits %>% 
+  group_by(Race.Number) %>%
+  mutate(min.x = min(Time),
+         sd.x = sd(Time)
+         ) %>% 
+  arrange(desc(sd.x))
+
+View(splits)
+# Sorting the runners according to the standard deviation of their splits shows
+# six runners whose times don't make sense. Removing these.
+results <-
+  results %>% 
+  filter(!
+           (Race.Number %in% c(16391,20283,20201,21318,21319,18108))
+         )
+# Removed from splits also.
+
+# Measure the difference between splits
+pairs(splits$Time)
+
+splits %>% 
+  group_by(Gender) %>% 
+  summarise(sd = mean(sd.x))
+  
+
+results %>%
+  filter(Distance == 42.2) %>%
+  ggplot(mapping = aes(Time)) +
+  geom_density() +
+  theme_minimal()
+  
+saveRDS(results, "results.RDS") # saved 11/11 21:09
