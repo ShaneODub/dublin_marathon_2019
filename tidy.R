@@ -4,6 +4,9 @@ library(stringr)
 library(hms)
 library(magrittr)
 library(ggplot2)
+library(tweenr)
+install.packages("gganimate")
+library(gganimate)
 
 setwd("C:/Users/Shane/Projects/marathon")
 
@@ -128,7 +131,7 @@ results <-
   results %>% 
   mutate(Race.Number = as.numeric(Race.Number),
          Gender = as.factor(Gender),
-         Age.Bracket = as.factor(Age.Bracket), # For now. Maybe as.numeric() later.
+         Age.Bracket = as.numeric(Age.Bracket),
          Overall.Position = as.numeric(Overall.Position),
          Time = as.numeric(as_hms(Time))/60)   # Times are now expressed in minutes.
 
@@ -151,7 +154,7 @@ glimpse(results)
 # Variables: 7
 # $ Race.Number      <dbl> 14, 14, 14, 14, 14, 14, 25, 25, 25, 25, 25, 25, 3, 3, ...
 # $ Gender           <fct> Male, Male, Male, Male, Male, Male, Male, Male, Male, ...
-# $ Age.Bracket      <fct> 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20...
+# $ Age.Bracket      <dbl> 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20...
 # $ Overall.Position <dbl> 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, ...
 # $ Finisher         <lgl> TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, ...
 # $ Distance         <dbl> 10.0, 20.0, 21.1, 30.0, 40.0, 42.2, 10.0, 20.0, 21.1, ...
@@ -414,7 +417,7 @@ results <-
                         lag(Time) + 0.82 * (lead(Time) - lag(Time)),
                         Time))
 
-saveRDS(results, "results.RDS") # saved at 5:40 11/11
+saveRDS(results, "results.RDS") # saved at 12.35 13/11
 
 # Defining a function for 5-number summary
 fiver <- function(df){
@@ -470,8 +473,7 @@ splits <-
   splits %>% 
   group_by(Race.Number) %>%
   mutate(min.x = min(Time),
-         sd.x = sd(Time)
-         ) %>% 
+         sd.x = sd(Time)) %>% 
   arrange(desc(sd.x))
 
 View(splits)
@@ -483,14 +485,20 @@ results <-
            (Race.Number %in% c(16391,20283,20201,21318,21319,18108))
          )
 # Removed from splits also.
-
-# Measure the difference between splits
-pairs(splits$Time)
+splits <-
+  splits %>% 
+  filter(!
+           (Race.Number %in% c(16391,20283,20201,21318,21319,18108))
+  )
 
 splits %>% 
   group_by(Gender) %>% 
   summarise(sd = mean(sd.x))
-  
+# A tibble: 2 x 2
+# Gender    sd
+# <fct>  <dbl>
+# 1 Female  4.30
+# 2 Male    4.56
 
 results %>%
   filter(Distance == 42.2) %>%
@@ -498,4 +506,103 @@ results %>%
   geom_density() +
   theme_minimal()
   
-saveRDS(results, "results.RDS") # saved 11/11 21:09
+saveRDS(results, "results.RDS") # saved 31/11 12.38
+results <- readRDS("results.RDS")
+
+results <- ungroup(results) # results was group_by Race.Number since earlier in the script.
+
+results %>% 
+  group_by(Gender) %>% 
+  summarise(count = n_distinct(Race.Number))
+# # A tibble: 2 x 2
+#   Gender count
+#   <fct>  <int>
+# 1 Female  6542
+# 2 Male   11078
+
+
+# Assigning an age to every runner, randomly distributed within their age category.
+# This will be useful to avoid overplotting on the final plot.
+
+gap  <-  0.2
+
+random_age <- function(Age.Bracket, Gender){
+  
+  if (Age.Bracket >= 35) {     
+    half.bracket <- 2.5             
+  } else if (Age.Bracket == 20) {
+    half.bracket <- 7.5
+  } else {
+    half.bracket <- 1
+  }
+  
+  if (Gender == "Male") {
+    return(Age.Bracket + runif(1, gap, half.bracket - gap))
+  } else {
+    return(Age.Bracket + runif(1, half.bracket + gap, 2 * half.bracket - gap))
+  }
+}
+
+results <- 
+  results %>%
+  group_by(Race.Number) %>% 
+  mutate(Age = random_age(Age.Bracket, Gender)) %>% 
+  ungroup()
+
+results <- select(results, 1,2,3,9,4,5,6,7)
+
+p <- 
+  results %>% 
+  ggplot(mapping = aes(Time, Age, col = Gender)) +
+  geom_point()
+
+p
+
+anim <- p + transition_ (Distance, transition_length = 2, state_length = 1)
+
+results <- 
+  results %>% 
+  group_by(Race.Number) %>%
+  mutate(Prev.Ckpt = lag(Distance, default = 0),
+         Prev.Time = lag(Time, default = 0),
+         KmPerMin = Time/Distance) %>% 
+  ungroup()
+
+newrows <- 
+  results %>% 
+  select(1:6) %>% 
+  distinct() %>% 
+  slice(rep(1:n(), each = 34)) %>% 
+  mutate(Distance = NA,
+         Time = rep(seq(15,510, by = 15),17620),
+         Prev.Ckpt = NA,
+         Prev.Time = NA,
+         KmPerMin = NA)
+
+View(newrows)
+
+results2 <- 
+  results %>% 
+  rbind(newrows) %>% 
+  arrange(Overall.Position, Time) %>% 
+  group_by(Overall.Position) %>% 
+  fill(Prev.Ckpt, .direction = "up") %>% 
+  fill(Prev.Time, .direction = "up") %>% 
+  fill(KmPerMin, .direction = "up")
+
+results2 <-   
+  results2 %>% 
+  mutate(Distance = if_else(is.na(Distance),
+                            Prev.Ckpt + (Time - Prev.Time)/KmPerMin,
+                            Distance))
+
+p <- 
+  results2 %>%
+  ggplot(mapping = aes(Distance, Age, col = Gender)) +
+  geom_point(size = 0.4) + 
+  xlim(0,42.2)
+
+p
+
+anim <- p + transition_states(Time)
+anim
