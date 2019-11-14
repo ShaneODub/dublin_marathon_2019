@@ -5,7 +5,6 @@ library(hms)
 library(magrittr)
 library(ggplot2)
 library(tweenr)
-install.packages("gganimate")
 library(gganimate)
 
 setwd("C:/Users/Shane/Projects/marathon")
@@ -551,33 +550,26 @@ results <-
 
 results <- select(results, 1,2,3,9,4,5,6,7)
 
-p <- 
-  results %>% 
-  ggplot(mapping = aes(Time, Age, col = Gender)) +
-  geom_point()
-
-p
-
-anim <- p + transition_ (Distance, transition_length = 2, state_length = 1)
-
 results <- 
   results %>% 
   group_by(Race.Number) %>%
   mutate(Prev.Ckpt = lag(Distance, default = 0),
          Prev.Time = lag(Time, default = 0),
-         KmPerMin = Time/Distance) %>% 
+         Next.Ckpt = Distance,
+         Next.Time = Time) %>% 
   ungroup()
 
 newrows <- 
   results %>% 
   select(1:6) %>% 
   distinct() %>% 
-  slice(rep(1:n(), each = 34)) %>% 
+  slice(rep(1:n(), each = 35)) %>% 
   mutate(Distance = NA,
-         Time = rep(seq(15,510, by = 15),17620),
+         Time = rep(seq(0,510, by = 15),17620),
          Prev.Ckpt = NA,
          Prev.Time = NA,
-         KmPerMin = NA)
+         Next.Ckpt = NA,
+         Next.Time = NA)
 
 View(newrows)
 
@@ -588,21 +580,48 @@ results2 <-
   group_by(Overall.Position) %>% 
   fill(Prev.Ckpt, .direction = "up") %>% 
   fill(Prev.Time, .direction = "up") %>% 
-  fill(KmPerMin, .direction = "up")
+  fill(Next.Ckpt, .direction = "up") %>% 
+  fill(Next.Time, .direction = "up") %>% 
+  ungroup()
 
 results2 <-   
   results2 %>% 
   mutate(Distance = if_else(is.na(Distance),
-                            Prev.Ckpt + (Time - Prev.Time)/KmPerMin,
+                            Prev.Ckpt + (Next.Ckpt - Prev.Ckpt)*(Time - Prev.Time)/(Next.Time - Prev.Time),
                             Distance))
 
+saveRDS(results2, "results2.RDS") # 14/11/2019 10:51
+saveRDS(results2, "results2_1.RDS") # 14/11/2019 16:05
+results2 <- readRDS("results2.RDS")
+
+# p <- 
+#   results2 %>%
+#   filter(Time %in% c(0,15,30,45,60,75),
+#          Gender == "Female",
+#          Overall.Position >= 15000) %>% 
+#     ggplot(mapping = aes(Distance, Age, col = Gender)) +
+#     geom_point(size = 0.4) + 
+#     xlim(0,42.2)
+
+anim_data <-
+  results2 %>% 
+  filter(Time %in% seq(0,510, by = 15))
+
 p <- 
-  results2 %>%
+  anim_data %>%
   ggplot(mapping = aes(Distance, Age, col = Gender)) +
-  geom_point(size = 0.4) + 
-  xlim(0,42.2)
+  geom_point(size = 0.4, aes(group = Race.Number)) + 
+  geom_vline(xintercept = 42.2) +
+  xlim(0,44)
 
-p
+p + facet_wrap(~Time)
 
-anim <- p + transition_states(Time)
-anim
+anim <- p + transition_time(Time)
+animate(anim, duration = 21, nframes = 200, height = 400, width = 1200)
+
+anim_save("anim5.gif", animation = last_animation())
+
+anim_data %>% 
+  group_by(Race.Number) %>% 
+  mutate(gain = Distance >= lag(Distance)) %>% 
+  View()
