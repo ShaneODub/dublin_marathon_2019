@@ -2,7 +2,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(hms)
-library(magrittr)
+library(magrittr) #
 library(ggplot2)
 library(tweenr)
 library(gganimate)
@@ -210,7 +210,7 @@ left_join(results,
 results$n[is.na(results$n)] <- 0
 
 # Showing one runner as an example:
-results %>% filter(Race.Number == 19596) %>% select(5:8)
+results %>% filter(Race.Number == 19065) %>% select(1,5:8)
 # Missing times from 10,20,21.1 & 42.2 checkpoint, so n = 4 in the rightmost column.
 # A tibble: 6 x 4
 # Finisher   Distance   Time     n
@@ -559,13 +559,29 @@ results <-
          Next.Time = Time) %>% 
   ungroup()
 
+ckpt44 <- 
+  results %>% 
+  select(1:6) %>% 
+  distinct() %>% 
+  mutate(Distance = 44.4,
+         Time = NA) %>% 
+  rbind(results) %>% 
+  arrange(Overall.Position, Distance) %>% 
+  mutate(Time = if_else(is.na(Time),
+                        2 * lag(Time) - lag(lag(Time)),
+                        Time),
+         Prev.Ckpt = NA,
+         Prev.Time = NA,
+         Next.Ckpt = NA,
+         Next.Time = NA)
+
 newrows <- 
   results %>% 
   select(1:6) %>% 
   distinct() %>% 
-  slice(rep(1:n(), each = 35)) %>% 
+  slice(rep(1:n(), each = 36)) %>% 
   mutate(Distance = NA,
-         Time = rep(seq(0,510, by = 15),17620),
+         Time = rep(seq(0,525, by = 15),17620),
          Prev.Ckpt = NA,
          Prev.Time = NA,
          Next.Ckpt = NA,
@@ -574,7 +590,7 @@ newrows <-
 View(newrows)
 
 results2 <- 
-  results %>% 
+  ckpt44 %>% 
   rbind(newrows) %>% 
   arrange(Overall.Position, Time) %>% 
   group_by(Overall.Position) %>% 
@@ -592,6 +608,7 @@ results2 <-
 
 saveRDS(results2, "results2.RDS") # 14/11/2019 10:51
 saveRDS(results2, "results2_1.RDS") # 14/11/2019 16:05
+saveRDS(results2, "results2_2.RDS") # 17/11/2019 21:33
 results2 <- readRDS("results2.RDS")
 
 # p <- 
@@ -605,14 +622,14 @@ results2 <- readRDS("results2.RDS")
 
 anim_data <-
   results2 %>% 
-  filter(Time %in% seq(0,510, by = 15))
+  filter(Time %in% seq(0,525, by = 15))
 
 p <- 
   anim_data %>%
   ggplot(mapping = aes(Distance, Age, col = Gender)) +
   geom_point(size = 0.4, aes(group = Race.Number)) + 
   geom_vline(xintercept = 42.2) +
-  xlim(0,44)
+  xlim(0,42.2)
 
 p + facet_wrap(~Time)
 
