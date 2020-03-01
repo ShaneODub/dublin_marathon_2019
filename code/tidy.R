@@ -418,7 +418,7 @@ results <-
 
 saveRDS(results, "results.RDS") # saved at 12.35 13/11
 
-# Defining a function for 5-number summary
+# Defining a function for 5-number summary in the format I want it
 fiver <- function(df){
   df %>% 
     group_by(Distance) %>% 
