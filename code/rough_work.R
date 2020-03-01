@@ -28,7 +28,7 @@ getwd()
 url <- "https://www.tdleventservices.co.uk/event-results/events?event=3492&page="
 
 list.of.dataframes <- vector("list",180)
-page <- 131
+page <- 1
 while (page <=180){
   list.of.dataframes[[page]] <-
     paste(url,page,sep="") %>%
@@ -37,7 +37,7 @@ while (page <=180){
     html_table() %>%
     data.frame()
   page <- page + 1
-  Sys.sleep(28)
+  Sys.sleep(60)
 }
 
 bigdf <- bind_rows(list.of.dataframes)

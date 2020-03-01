@@ -1,0 +1,58 @@
+---
+title: 'Dublin City Marathon 2019: Analysis with R'
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r include=FALSE}
+library(xml2)
+library(rvest)
+library(plyr)
+library(dplyr) #
+```
+
+
+## Get the data
+
+Full results for the Dublin Marathon were scraped from tables on a website. (180 tables with 100 entrants on each table.) Tables were compiled into a list called 'list.of.dataframes'.
+
+```{r Scraping the data}
+
+# Set up an empty list to store our downloaded tables.
+list.of.dataframes <- vector("list",180)
+
+# Store the URL in a variable, minus the page number:
+url <- "https://www.tdleventservices.co.uk/event-results/events?event=3492&page="
+
+# Now we loop through 180 pages; add each page number to the URL; extract and store the data.
+page <- 177
+while (page <=180){
+  list.of.dataframes[[page]] <-
+    paste(url,page,sep="") %>%
+    read_html() %>%                                                                     # xml2
+    html_nodes(xpath='/html/body/div[2]/div/div/div/div/div[2]/div[2]/table') %>%       # rvest
+    html_table() %>%                    
+    data.frame()
+  page <- page + 1
+  Sys.sleep(5) # Pause 45s after downloading each table, to avoid being mistaken for mischief-maker.
+}
+```
+
+Once all are downloaded, bind all the results into a single dataframe.
+
+```{r}
+
+all.results.df <- rbind.fill(list.of.dataframes)                                         # plyr  
+
+```
+
+Error: Column `Gender.Position` can't be converted from integer to character
+
+This is because some of the columns that contain mostly numeric data also contain 'DNF' (did not finish) for the runners who didn't reach the finish line.
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
